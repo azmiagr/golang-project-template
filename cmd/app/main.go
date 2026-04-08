@@ -6,7 +6,7 @@ import (
 	"golang-project-template/internal/service"
 	"golang-project-template/pkg/bcrypt"
 	"golang-project-template/pkg/config"
-	mariadb "golang-project-template/pkg/database"
+	"golang-project-template/pkg/database/mariadb"
 	"golang-project-template/pkg/jwt"
 	"golang-project-template/pkg/middleware"
 	"log"
