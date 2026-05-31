@@ -1,7 +1,7 @@
 package mariadb
 
 import (
-	"golang-project-template/pkg/config"
+	"github.com/azmiagr/golang-project-template/pkg/config"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"

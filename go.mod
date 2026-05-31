@@ -1,4 +1,4 @@
-module golang-project-template
+module github.com/azmiagr/golang-project-template
 
 go 1.25.5
 

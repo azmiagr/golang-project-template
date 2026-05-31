@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"golang-project-template/internal/service"
-	"golang-project-template/pkg/jwt"
+	"github.com/azmiagr/golang-project-template/internal/service"
+	"github.com/azmiagr/golang-project-template/pkg/jwt"
 )
 
 type Interface interface {

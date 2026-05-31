@@ -1,7 +1,7 @@
 package mariadb
 
 import (
-	"golang-project-template/entity"
+	"github.com/azmiagr/golang-project-template/entity"
 
 	"gorm.io/gorm"
 )

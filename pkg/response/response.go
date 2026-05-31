@@ -1,7 +1,7 @@
 package response
 
 import (
-	"golang-project-template/pkg/errors"
+	"github.com/azmiagr/golang-project-template/pkg/errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"

@@ -1,14 +1,14 @@
 package main
 
 import (
-	"golang-project-template/internal/handler/rest"
-	"golang-project-template/internal/repository"
-	"golang-project-template/internal/service"
-	"golang-project-template/pkg/bcrypt"
-	"golang-project-template/pkg/config"
-	"golang-project-template/pkg/database/mariadb"
-	"golang-project-template/pkg/jwt"
-	"golang-project-template/pkg/middleware"
+	"github.com/azmiagr/golang-project-template/internal/handler/rest"
+	"github.com/azmiagr/golang-project-template/internal/repository"
+	"github.com/azmiagr/golang-project-template/internal/service"
+	"github.com/azmiagr/golang-project-template/pkg/bcrypt"
+	"github.com/azmiagr/golang-project-template/pkg/config"
+	"github.com/azmiagr/golang-project-template/pkg/database/mariadb"
+	"github.com/azmiagr/golang-project-template/pkg/jwt"
+	"github.com/azmiagr/golang-project-template/pkg/middleware"
 	"log"
 )
 

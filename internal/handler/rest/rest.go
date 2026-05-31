@@ -2,8 +2,8 @@ package rest
 
 import (
 	"fmt"
-	"golang-project-template/internal/service"
-	"golang-project-template/pkg/middleware"
+	"github.com/azmiagr/golang-project-template/internal/service"
+	"github.com/azmiagr/golang-project-template/pkg/middleware"
 	"os"
 
 	"github.com/gin-gonic/gin"
