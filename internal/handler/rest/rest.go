@@ -2,9 +2,10 @@ package rest
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/azmiagr/golang-project-template/internal/service"
 	"github.com/azmiagr/golang-project-template/pkg/middleware"
-	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,6 +25,7 @@ func NewRest(service *service.Service, middleware middleware.Interface) *Rest {
 }
 
 func (r *Rest) MountEndpoint() {
+	r.router.Use(r.middleware.Cors())
 
 }
 
