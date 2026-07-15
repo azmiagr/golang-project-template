@@ -1,6 +1,6 @@
-# golang-project-template
+# Go REST API Starter
 
-A production-ready Go REST API boilerplate built on a clean 3-layer architecture. Clone this template to skip the initial setup and jump straight into writing business logic.
+A clean Go REST API with a simple 3-layer architecture. It includes the common pieces needed for an HTTP service, database access, authentication utilities, middleware, configuration, and standardized JSON responses.
 
 ## Tech Stack
 
@@ -19,7 +19,7 @@ A production-ready Go REST API boilerplate built on a clean 3-layer architecture
 ## Folder Structure
 
 ```
-golang-project-template/
+project-root/
 ├── cmd/
 │   └── app/
 │       └── main.go           # Entry point: wires all dependencies and starts the server
@@ -63,7 +63,7 @@ golang-project-template/
 
 ## Architecture
 
-The core of this template lives in the `internal/` directory, which enforces a strict 3-layer separation of concerns.
+The core application code lives in the `internal/` directory, which keeps a strict 3-layer separation of concerns.
 
 ```
 HTTP Request
@@ -145,21 +145,19 @@ Copy `.env.example` to `.env` and fill in the values before running.
 
 ---
 
-## Getting Started with This Template
+## Getting Started
 
-1. **Clone or use as template**
+1. **Create your project**
 
    ```bash
-   git clone https://github.com/your-username/golang-project-template.git my-new-project
-   cd my-new-project
+   git clone <repository-url> <project-name>
+   cd <project-name>
    ```
 
-2. **Update the module name**
+2. **Update the module path**
 
    ```bash
-   # Replace the module name in go.mod and all imports
-   find . -type f -name "*.go" | xargs sed -i 's|golang-project-template|my-new-project|g'
-   # Then update go.mod manually
+   go mod edit -module <your-module-path>
    ```
 
 3. **Set up environment**
