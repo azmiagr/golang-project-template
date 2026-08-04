@@ -1,0 +1,4 @@
+interface:
+  display_name: "Layered Go API"
+  short_description: "Design Go APIs with clear layered boundaries."
+  default_prompt: "Use $build-layered-go-api to design a maintainable Go REST API architecture for this project."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Containerize Go API"
+  short_description: "Package Go APIs with lean production containers."
+  default_prompt: "Use $containerize-go-api to create a production-ready multi-stage Docker setup for this Go service."

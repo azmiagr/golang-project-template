@@ -1,0 +1,4 @@
+interface:
+  display_name: "Go External Integrations"
+  short_description: "Integrate storage, payments, mail, and APIs."
+  default_prompt: "Use $integrate-external-services-in-go to add this third-party service behind a testable Go adapter."

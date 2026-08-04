@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gin JWT and RBAC"
+  short_description: "Protect Gin routes with JWT and role guards."
+  default_prompt: "Use $secure-gin-api-with-jwt-rbac to add authentication, token revocation, and role-based authorization to this API."

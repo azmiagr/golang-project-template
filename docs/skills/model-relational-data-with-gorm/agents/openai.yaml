@@ -1,0 +1,4 @@
+interface:
+  display_name: "GORM Relational Modeling"
+  short_description: "Model relational domains and queries with GORM."
+  default_prompt: "Use $model-relational-data-with-gorm to design the entities, migrations, repositories, and query projections for this domain."

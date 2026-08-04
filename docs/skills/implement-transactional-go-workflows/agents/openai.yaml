@@ -1,0 +1,4 @@
+interface:
+  display_name: "Transactional Go Workflows"
+  short_description: "Build safe stateful workflows and webhooks."
+  default_prompt: "Use $implement-transactional-go-workflows to implement this concurrent state transition safely and idempotently."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Layered Go Feature"
+  short_description: "Add complete features across every API layer."
+  default_prompt: "Use $add-layered-go-feature to implement this endpoint through entity, DTO, repository, service, handler, and routing layers."
