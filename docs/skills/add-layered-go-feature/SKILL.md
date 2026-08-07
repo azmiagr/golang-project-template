@@ -34,19 +34,50 @@ Implement the smallest complete vertical slice that matches the repository's exi
 ### 2. Repository
 
 - Add the narrowest operation the use case needs.
-- Accept `tx *gorm.DB` as the first argument when the codebase uses caller-owned transactions.
+- Accept `tx *gorm.DB` as the first argument, matching this repository's caller-owned transaction convention.
 - Keep filtering, joins, locking, preload choices, and SQL in the repository.
 - Return `gorm.ErrRecordNotFound` or another storage error; map it in the service.
 - Use a projection DTO for aggregates and multi-table reads.
+- Never call `Begin`, `Commit`, or `Rollback` inside a repository.
 
 ### 3. Service
 
 - Add the method to the service interface before implementing it.
 - Validate the principal, normalized input, ownership, invariants, and current state.
 - Map storage absence to not-found only when absence is semantically not-found.
-- Open a transaction for related writes or read-modify-write operations.
+- Open a transaction for related writes or read-modify-write operations using the local pattern below.
 - Construct entities and response DTOs here, not in the repository.
 - Inject external adapters instead of creating SDK clients inside the method.
+
+Use this repository's manual transaction style:
+
+```go
+tx := s.db.Begin()
+defer tx.Rollback()
+
+record, err := s.someRepo.GetSomething(tx, param)
+if err != nil {
+    return nil, err
+}
+
+err = s.someRepo.UpdateSomething(tx, record)
+if err != nil {
+    return nil, err
+}
+
+err = tx.Commit().Error
+if err != nil {
+    return nil, err
+}
+
+return result, nil
+```
+
+- Use `s.db` directly only for reads that do not belong to a transaction.
+- Use `errors.Is(err, gorm.ErrRecordNotFound)` in the service to distinguish absence from real database errors.
+- All repository calls that depend on the transaction must happen before `tx.Commit()`.
+- Do not use `tx` again after `Commit` or `Rollback`; use `s.db` for any post-commit read.
+- Keep remote calls outside the transaction unless the current local pattern already intentionally keeps them inside and the risk is accepted.
 
 ### 4. Handler
 

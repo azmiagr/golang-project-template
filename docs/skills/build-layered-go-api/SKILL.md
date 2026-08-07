@@ -67,10 +67,33 @@ Keep project-specific helpers under `internal/` unless another module is expecte
 - Return transport-neutral errors and response-ready DTOs.
 - Depend on injected clocks, hashers, storage, mail, payment, and token ports when behavior must be tested.
 
+#### Kode Kabi service pattern
+
+This repository currently uses manual GORM transactions in the service layer:
+
+```go
+tx := s.db.Begin()
+defer tx.Rollback()
+
+// Use tx for every repository read/write that belongs to the unit of work.
+
+err := tx.Commit().Error
+if err != nil {
+    return nil, err
+}
+```
+
+- Store `db *gorm.DB` on the service implementation and initialize it from `mariadb.Connection`, matching existing services.
+- Use the base `s.db` only for non-transactional reads.
+- For multi-write or read-modify-write flows, call repositories with the active `tx`.
+- Do every transaction-scoped read before `tx.Commit()`. Never call a repository with `tx` after commit or rollback.
+- Return before commit on validation or repository errors; the deferred rollback handles cleanup.
+- Repositories must not begin, commit, or rollback transactions.
+
 ### Repository
 
 - Own all GORM and SQL expressions.
-- Accept the active `*gorm.DB` handle so the caller can supply either the base connection or a transaction.
+- Accept the active `*gorm.DB` handle as the first argument so the service can supply either `s.db` or a transaction.
 - Return database errors without choosing HTTP status codes.
 - Use dedicated projection structs for aggregate reads rather than bloated entities.
 
@@ -111,4 +134,3 @@ Keep constructors explicit. Prefer a slightly verbose dependency list over hidde
 3. Confirm every protected route composes authentication before authorization.
 4. Confirm every new dependency is constructed at the composition root.
 5. Confirm transactions, errors, and responses follow one convention across features.
-

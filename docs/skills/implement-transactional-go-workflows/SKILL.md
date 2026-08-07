@@ -27,19 +27,47 @@ Reject transitions not present in the state machine with a conflict-style applic
 
 ## Own the transaction in the service
 
-Prefer a callback so rollback occurs automatically:
+Match the repository's local transaction convention. In Kode Kabi services, open transactions manually with `Begin`, defer rollback, pass `tx` into repositories, then commit once at the end:
 
 ```go
-err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-    order, err := orders.GetForUpdate(ctx, tx, orderID)
-    if err != nil { return err }
-    if order.Status == target { return nil } // idempotent replay
-    if !allowed(order.Status, target) { return ErrInvalidTransition }
-    return orders.UpdateStatus(ctx, tx, orderID, target, now)
-})
+tx := s.db.Begin()
+defer tx.Rollback()
+
+order, err := s.orderRepo.GetForUpdate(tx, orderID)
+if err != nil {
+    return nil, err
+}
+
+if order.Status == target {
+    err = tx.Commit().Error
+    if err != nil {
+        return nil, err
+    }
+    return result, nil
+}
+
+if !allowed(order.Status, target) {
+    return nil, ErrInvalidTransition
+}
+
+err = s.orderRepo.UpdateStatus(tx, orderID, target, now)
+if err != nil {
+    return nil, err
+}
+
+err = tx.Commit().Error
+if err != nil {
+    return nil, err
+}
+
+return result, nil
 ```
 
-If the codebase uses `Begin`, always check begin, commit, and rollback errors where they affect correctness. Never commit from a repository.
+- Use `s.db` for non-transactional reads and `tx` for every repository operation in the unit of work.
+- Never commit from a repository.
+- Never call a repository with `tx` after `tx.Commit()` or after rollback; that transaction handle is closed.
+- Create response DTOs or JWTs before commit only when they depend on data already read inside the transaction; otherwise use `s.db` after commit.
+- If a future feature uses GORM's callback `Transaction`, keep it local to that feature and do not mix callback and manual transaction styles in one method.
 
 ## Lock the minimum authoritative rows
 
@@ -94,4 +122,3 @@ Do not promise exactly-once behavior across a database and remote API. Build at-
 - Verify duplicate and out-of-order events.
 - Verify insufficient balance or stock under concurrent load.
 - Run with the race detector and the production database dialect when locks matter.
-

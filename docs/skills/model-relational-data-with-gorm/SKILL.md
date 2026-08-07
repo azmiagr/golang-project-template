@@ -32,17 +32,19 @@ Use interfaces that describe use-case queries, not generic ORM verbs:
 
 ```go
 type OrderRepository interface {
-    GetForUpdate(ctx context.Context, tx *gorm.DB, id uuid.UUID) (*entity.Order, error)
-    Create(ctx context.Context, tx *gorm.DB, order *entity.Order) error
+    GetForUpdate(tx *gorm.DB, id uuid.UUID) (*entity.Order, error)
+    Create(tx *gorm.DB, order *entity.Order) error
 }
 ```
 
-- Pass either the base DB or an active transaction into every operation.
-- Call `WithContext(ctx)` before the query.
+- Pass either the base DB or an active transaction into every operation as the first argument.
+- Follow the current repository signatures in this codebase: `Method(tx *gorm.DB, ...)`.
+- Add `context.Context` only as a deliberate repo-wide refactor, not for one isolated method.
 - Keep GORM clauses and raw SQL inside the repository.
 - Return storage errors intact so the service can use `errors.Is`.
 - Prefer explicit column updates for state changes over a broad `Save` when unintended fields could be overwritten.
 - Add deterministic ordering to list queries and bounds to user-facing result sets.
+- Do not open or finish transactions in repositories; services own `Begin`, `Rollback`, and `Commit`.
 
 ## Build aggregate reads intentionally
 
@@ -57,6 +59,22 @@ type OrderRepository interface {
 ## Apply row locking only inside transactions
 
 Use `clause.Locking{Strength: "UPDATE"}` for authoritative read-modify-write flows. Lock rows in a consistent order across code paths and keep the transaction short. Never treat a lock outside a transaction as concurrency protection.
+
+In this repository, expose locking through a repository method such as:
+
+```go
+func (r *RegistrationSessionRepository) GetRegistrationSessionForUpdate(tx *gorm.DB, tokenHash string) (*entity.RegistrationSession, error) {
+    var session entity.RegistrationSession
+    err := tx.
+        Clauses(clause.Locking{Strength: "UPDATE"}).
+        Where("session_token_hash = ?", tokenHash).
+        First(&session).Error
+    if err != nil {
+        return nil, err
+    }
+    return &session, nil
+}
+```
 
 ## Manage migrations
 
@@ -81,4 +99,3 @@ Use `clause.Locking{Strength: "UPDATE"}` for authoritative read-modify-write flo
 3. Run concurrent tests for allocation, claim, balance, inventory, or state-transition paths.
 4. Confirm query results remain correct with multiple children on every joined relationship.
 5. Confirm no API response serializes password hashes, secret tokens, or unrelated associations from an entity.
-
