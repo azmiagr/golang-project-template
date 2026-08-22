@@ -1,6 +1,6 @@
 ---
 name: containerize-go-api
-description: Package a Go REST API into a small, secure production container with multi-stage builds, CGO-aware dependencies, runtime configuration, Docker Compose services, database health checks, and reproducible verification. Use when creating or reviewing a Dockerfile, Compose stack, container startup, or deployment packaging for Go services.
+description: Package and deploy a Go REST API with production containers, Docker Compose, health checks, and GitHub Actions CI/CD to a VPS. Use when creating or reviewing Dockerfiles, Compose stacks, deployment scripts, or GitHub Actions for Go services.
 ---
 
 # Containerize a Go API
@@ -57,7 +57,79 @@ For a pure-Go binary, prefer `CGO_ENABLED=0`. For image codecs, SQLite, or other
 
 ### GitHub Actions and VPS deployment pattern
 
-When a project deploys to a VPS through GitHub Actions, derive names and paths from the local repository instead of hardcoding template leftovers:
+When the requested deployment target is a VPS, create `.github/workflows/deploy.yml` as part of the deliverable unless the user explicitly excludes CI/CD. Use the repository's current GitHub Actions workflow as the local formatting source when one exists; otherwise use the pattern below.
+
+The workflow must:
+
+- Run on pushes to `main` and support `workflow_dispatch`.
+- Define `REGISTRY=ghcr.io` and `IMAGE_NAME=${{ github.repository }}` at workflow scope.
+- Use separate `build-and-push` and `deploy` jobs; `deploy` must `needs: build-and-push`.
+- Give the build job `contents: read` and `packages: write` permissions.
+- Check out the repository, set up Go from `go.mod`, run `go test ./...`, log in to GHCR with `GITHUB_TOKEN`, set up Buildx, then push both `latest` and `${{ github.sha }}` tags through `docker/build-push-action` with GitHub Actions cache.
+- Use `appleboy/ssh-action` for deployment. On the VPS, log in to GHCR with `CR_PAT`, export the lowercased `IMAGE_REPOSITORY` and immutable `IMAGE_TAG=${{ github.sha }}`, change into `${{ secrets.VPS_APP_DIR }}`, and invoke `bash deploy.sh`.
+- Require and document these GitHub secrets: `VPS_HOST`, `VPS_USERNAME`, `VPS_SSH_KEY`, `VPS_APP_DIR`, and `CR_PAT`. `CR_PAT` needs `read:packages` to pull a private GHCR image.
+
+Use this shape unless local project conventions require a compatible variation:
+
+```yaml
+name: Build and Deploy
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -eu
+            echo "${{ secrets.CR_PAT }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            export IMAGE_REPOSITORY="ghcr.io/$(printf '%s' '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+            export IMAGE_TAG="${{ github.sha }}"
+            cd "${{ secrets.VPS_APP_DIR }}"
+            bash deploy.sh
+```
+
+Keep Compose and `deploy.sh` compatible with that workflow:
 
 - Use a Compose project name that matches the application or repository slug.
 - Name containers and networks from that project name, for example `<project>-app`, `<project>-db`, and `<project>-net`.
@@ -99,7 +171,7 @@ fi
 
 - GitHub Actions workflow files must live under `.github/workflows/`.
 - A minimal SSH deploy workflow commonly needs repository secrets such as `CR_PAT`, `VPS_HOST`, `VPS_SSH_KEY`, and `VPS_USERNAME`; add `VPS_PORT` only when SSH does not use port 22.
-- The workflow can build and push to GHCR with `GITHUB_TOKEN`, then SSH to the VPS, log in to GHCR with `CR_PAT`, export `GITHUB_REPOSITORY=${{ github.repository }}`, export the selected immutable `IMAGE_TAG`, export the project-specific `APP_DIR`, and run `bash deploy.sh`.
+- Set Compose image names through `IMAGE_REPOSITORY` and `IMAGE_TAG`, with safe local defaults. If both are exported, `deploy.sh` must pull the app image and use `up -d --no-build`; otherwise it may use `up -d --build` for local deployment.
 - Do not run `chmod +x deploy.sh` before a tracked script performs `git pull`: it can dirty the VPS working tree and block that pull. Either store the executable bit in Git or invoke the script explicitly with `bash`.
 - After Compose starts, wait for the API container health status. On timeout or an exited container, print recent service logs and fail the deployment instead of reporting success.
 - If deployment fails while pulling a public database image with `TLS handshake timeout`, treat it as VPS-to-registry network instability; retry or pre-pull the image on the VPS.
