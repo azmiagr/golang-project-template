@@ -27,14 +27,18 @@ Implement the smallest complete vertical slice that matches the repository's exi
 ### 1. Entity and migration
 
 - Change persistence entities only when storage changes.
+- Keep entities limited to columns, persistence tags, and associations; rely on GORM's naming convention unless an immutable legacy schema requires `TableName()`.
 - Add explicit primary keys, indexes, nullability, precision, timestamps, and relation rules.
+- Use scalar foreign-key fields, nullable pointers where absence is meaningful, and `json:"-"` on associations that are not part of an API contract.
+- Use `belongsTo` only on the entity that owns the FK; specify `foreignKey` and `references` when multiple or self-referential relationships could be ambiguous.
+- Choose every delete action (`CASCADE`, `RESTRICT`, or `SET NULL`) from lifecycle rules, not convenience.
 - Register new entities in the migration mechanism in dependency order.
 - Make seeds deterministic and idempotent.
 
 ### 2. Repository
 
 - Add the narrowest operation the use case needs.
-- Accept `tx *gorm.DB` as the first argument, matching this repository's caller-owned transaction convention.
+- Follow the application's transaction convention. A common GORM approach is to accept `tx *gorm.DB` first so callers can pass either the base handle or an active transaction.
 - Keep filtering, joins, locking, preload choices, and SQL in the repository.
 - Return `gorm.ErrRecordNotFound` or another storage error; map it in the service.
 - Use a projection DTO for aggregates and multi-table reads.
@@ -45,11 +49,11 @@ Implement the smallest complete vertical slice that matches the repository's exi
 - Add the method to the service interface before implementing it.
 - Validate the principal, normalized input, ownership, invariants, and current state.
 - Map storage absence to not-found only when absence is semantically not-found.
-- Open a transaction for related writes or read-modify-write operations using the local pattern below.
+- Open a transaction for related writes or read-modify-write operations using the application's established pattern.
 - Construct entities and response DTOs here, not in the repository.
 - Inject external adapters instead of creating SDK clients inside the method.
 
-Use this repository's manual transaction style:
+One common manual transaction style is:
 
 ```go
 tx := s.db.Begin()
@@ -77,7 +81,7 @@ return result, nil
 - Use `errors.Is(err, gorm.ErrRecordNotFound)` in the service to distinguish absence from real database errors.
 - All repository calls that depend on the transaction must happen before `tx.Commit()`.
 - Do not use `tx` again after `Commit` or `Rollback`; use `s.db` for any post-commit read.
-- Keep remote calls outside the transaction unless the current local pattern already intentionally keeps them inside and the risk is accepted.
+- Keep remote calls outside the transaction unless a documented consistency requirement and bounded failure strategy justify otherwise.
 
 ### 4. Handler
 

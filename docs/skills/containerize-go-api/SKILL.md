@@ -133,7 +133,7 @@ Keep Compose and `deploy.sh` compatible with that workflow:
 
 - Use a Compose project name that matches the application or repository slug.
 - Name containers and networks from that project name, for example `<project>-app`, `<project>-db`, and `<project>-net`.
-- Use a GHCR image name based on `GITHUB_REPOSITORY`, with a safe fallback matching the current repository.
+- Use a GHCR image name based on `GITHUB_REPOSITORY`, with a safe fallback derived from the application name.
 - Publish an immutable image tag such as the Git commit SHA alongside a convenience tag such as `latest`.
 - Deploy the immutable tag selected by CI through an environment variable such as `IMAGE_TAG`; do not let a VPS deployment silently switch to a newer `latest` image.
 - Keep app host/container port configurable through `.env` `PORT`; set a project-appropriate default.

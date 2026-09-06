@@ -49,6 +49,14 @@ pkg/                         genuinely reusable cross-cutting adapters
 
 Keep project-specific helpers under `internal/` unless another module is expected to import them.
 
+## Keep entity boundaries explicit
+
+- Let entities describe database tables, keys, constraints, and ORM associations.
+- Keep request/response DTOs and aggregate projections separate from entities.
+- Place normalization, generated identifiers, hierarchy traversal, and multi-record invariants in services or dedicated domain helpers, not entity methods.
+- Declare foreign keys and deletion behavior intentionally; use pointers where `NULL` and a zero value have different meanings.
+- Do not serialize entities or their associations directly as HTTP responses by default.
+
 ## Assign responsibilities
 
 ### Handler
@@ -67,9 +75,9 @@ Keep project-specific helpers under `internal/` unless another module is expecte
 - Return transport-neutral errors and response-ready DTOs.
 - Depend on injected clocks, hashers, storage, mail, payment, and token ports when behavior must be tested.
 
-#### Kode Kabi service pattern
+#### Manual transaction pattern
 
-This repository currently uses manual GORM transactions in the service layer:
+When the application uses manual GORM transactions in the service layer:
 
 ```go
 tx := s.db.Begin()
@@ -83,7 +91,7 @@ if err != nil {
 }
 ```
 
-- Store `db *gorm.DB` on the service implementation and initialize it from `mariadb.Connection`, matching existing services.
+- Inject `db *gorm.DB` or a transaction factory into the service implementation; avoid hidden package globals in new designs.
 - Use the base `s.db` only for non-transactional reads.
 - For multi-write or read-modify-write flows, call repositories with the active `tx`.
 - Do every transaction-scoped read before `tx.Commit()`. Never call a repository with `tx` after commit or rollback.
@@ -117,7 +125,7 @@ Keep constructors explicit. Prefer a slightly verbose dependency list over hidde
 - Define one JSON success/error envelope if the API contract requires it.
 - Centralize authentication, authorization, CORS, request IDs, recovery, and logging as middleware.
 - Keep secrets and environment lookup at the configuration edge; pass typed config inward.
-- Carry `context.Context` from Gin into services, repositories, and external clients.
+- Carry `context.Context` from Gin into services, repositories, and external clients when introducing or maintaining a context-aware application boundary. Do not create a partial convention in only one method.
 
 ## Make architecture decisions deliberately
 

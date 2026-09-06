@@ -27,7 +27,7 @@ Reject transitions not present in the state machine with a conflict-style applic
 
 ## Own the transaction in the service
 
-Match the repository's local transaction convention. In Kode Kabi services, open transactions manually with `Begin`, defer rollback, pass `tx` into repositories, then commit once at the end:
+Match the application's transaction convention. When using manual GORM transactions, open with `Begin`, defer rollback, pass `tx` into repositories, then commit once at the end:
 
 ```go
 tx := s.db.Begin()

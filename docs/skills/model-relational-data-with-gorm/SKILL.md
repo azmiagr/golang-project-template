@@ -5,26 +5,67 @@ description: Design relational domain entities, migrations, idempotent seeds, re
 
 # Model Relational Data with GORM
 
-Treat the database schema as a long-lived contract. Optimize entities for persistence and DTOs for use cases.
+Treat the database schema as a long-lived contract. Design entities for persistence, DTOs for use cases, and projections for reads; do not merge those concerns into one struct.
 
-## Model three distinct shapes
+## Separate persistence, API, and read shapes
 
-- Use an entity for table columns, keys, constraints, and relationships.
-- Use request/response DTOs for public API stability and validation.
-- Use projection rows for joins, aggregates, reports, and dashboards.
+- **Entity:** table columns, database keys, indexes, constraints, and GORM associations only.
+- **Request DTO:** transport input and binding validation. It must not be persisted directly.
+- **Response DTO:** stable public output. It must not expose an entity merely because that is convenient.
+- **Projection row:** a repository-private or model-level struct used for joins, aggregates, reports, or dashboards.
 
-Do not reuse one struct for all three concerns.
+Rely on GORM's default table naming from the struct type. Add `TableName()` only when integrating with an existing schema whose table name cannot be changed; it is a compatibility exception, not a default entity requirement. Keep entity methods limited to persistence-neutral value behavior. Put request normalization, generated codes, hierarchy levels, authorization, state transitions, and cross-record rules in services or dedicated domain helpers instead.
 
-## Design the schema
+## Define entities deliberately
 
-1. Write the invariant and access patterns before writing tags.
-2. Select primary keys consistently; generate UUIDs in the application when the project follows that convention.
-3. Mark foreign keys and frequently filtered or sorted columns with indexes.
-4. Define decimal precision explicitly. Prefer integer minor units or a decimal type for money; avoid binary floating-point for new financial data.
-5. Use pointers or nullable types when absence differs from a zero value.
-6. Define created and updated timestamps consistently and store operational timestamps in UTC.
-7. Decide cascade, restrict, or set-null behavior for every relationship.
-8. Prefer portable varchar status columns plus Go constants when database enum migrations would make evolution fragile.
+Before writing tags, state the invariant, deletion semantics, and expected query patterns.
+
+- Pick one primary-key strategy and use it consistently. Generate UUIDs in the application only when that is the chosen application convention.
+- Use scalar ID fields for foreign keys and add an index when the relationship is filtered, joined, or traversed often.
+- Use `*uuid.UUID`, `*time.Time`, pointers, or nullable database types when `NULL` differs from a zero value.
+- Mark required columns `not null`; define default values only when the database should own the default.
+- Define precision and scale for decimals. Prefer integer minor units or a decimal type for money; do not introduce binary floating point for new monetary values.
+- Apply timestamps consistently. Store instants in UTC and convert only at the API or presentation boundary.
+- Prefer portable string status columns with application constants unless a database enum is a deliberate operational choice.
+- Add unique indexes for durable invariants, including composite uniqueness such as a name scoped to a parent.
+
+Declare associations explicitly when GORM cannot infer them safely or when the relationship deserves documented semantics:
+
+```go
+type Membership struct {
+    UserID  uuid.UUID `gorm:"type:char(36);primaryKey"`
+    TeamID  uuid.UUID `gorm:"type:char(36);primaryKey"`
+    Role    string    `gorm:"type:varchar(30);not null"`
+
+    User User `json:"-" gorm:"foreignKey:UserID;references:UserID;belongsTo;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+    Team Team `json:"-" gorm:"foreignKey:TeamID;references:TeamID;belongsTo;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+}
+```
+
+### Use `belongsTo` precisely
+
+Use `belongsTo` on the entity that **stores the foreign-key column**. The association does not create or validate that column; declare the scalar foreign key explicitly and choose its nullability from the domain rule.
+
+```go
+type Invoice struct {
+    InvoiceID uuid.UUID  `gorm:"type:char(36);primaryKey"`
+    AccountID *uuid.UUID `gorm:"type:char(36);index"`
+
+    Account *Account `json:"-" gorm:"foreignKey:AccountID;references:AccountID;belongsTo;constraint:OnUpdate:CASCADE,OnDelete:SET NULL"`
+}
+```
+
+- Use a non-pointer FK and `RESTRICT` or `CASCADE` when the relationship is required. Use a pointer FK only when the relationship may truly be absent; `SET NULL` requires a nullable FK.
+- Specify both `foreignKey` and `references` when names differ from GORM defaults, when there are multiple relations to the same table, or when a self-reference could be ambiguous. This prevents GORM from inferring the wrong association kind or key.
+- The inverse collection is normally `has many`, not another `belongsTo`. For example, `Account.Invoices []Invoice` uses `foreignKey:AccountID` because `Invoice` owns the FK.
+- `belongsTo` describes how records are joined; it does not decide authorization, whether a parent may be deleted, or whether a child may be reassigned. Express those lifecycle rules with constraints and service-level validation.
+- Preload a belongs-to association only when the use case needs it. Prefer an explicit projection for lists or aggregate reads rather than serializing a fully loaded entity graph.
+
+- Use `json:"-"` on persistence associations by default; return purpose-built response DTOs instead of serializing object graphs.
+- Choose `CASCADE`, `RESTRICT`, or `SET NULL` from the domain lifecycle. Never use cascade only to make deletion easier.
+- Model many-to-many relationships with an explicit join entity whenever the relation has metadata, lifecycle, audit fields, or its own constraints.
+- For self-references, use a nullable parent FK plus explicit parent/children associations. Enforce cycle prevention, maximum depth, and subtree behavior in a service/repository workflow; foreign keys alone cannot do that.
+- Keep generated sequences, migration-only helper structs, and one-off backfill types out of the public entity package unless they are part of the domain schema.
 
 ## Keep repositories transaction-aware
 
@@ -38,7 +79,7 @@ type OrderRepository interface {
 ```
 
 - Pass either the base DB or an active transaction into every operation as the first argument.
-- Follow the current repository signatures in this codebase: `Method(tx *gorm.DB, ...)`.
+- Choose one repository transaction convention and apply it consistently. A common GORM convention is `Method(tx *gorm.DB, ...)`, where callers pass either the base DB handle or an active transaction.
 - Add `context.Context` only as a deliberate repo-wide refactor, not for one isolated method.
 - Keep GORM clauses and raw SQL inside the repository.
 - Return storage errors intact so the service can use `errors.Is`.
@@ -60,7 +101,7 @@ type OrderRepository interface {
 
 Use `clause.Locking{Strength: "UPDATE"}` for authoritative read-modify-write flows. Lock rows in a consistent order across code paths and keep the transaction short. Never treat a lock outside a transaction as concurrency protection.
 
-In this repository, expose locking through a repository method such as:
+Expose locking through a repository method such as:
 
 ```go
 func (r *RegistrationSessionRepository) GetRegistrationSessionForUpdate(tx *gorm.DB, tokenHash string) (*entity.RegistrationSession, error) {
@@ -78,9 +119,10 @@ func (r *RegistrationSessionRepository) GetRegistrationSessionForUpdate(tx *gorm
 
 ## Manage migrations
 
-- Register referenced tables before tables with foreign keys.
+- Register tables in foreign-key dependency order when the migration tool requires it.
 - Review generated DDL before relying on `AutoMigrate` in production.
-- Use versioned migrations for destructive changes, data backfills, renames, and zero-downtime deployments.
+- Use explicit, versioned migrations for destructive changes, data backfills, renames, constraint changes, and zero-downtime deployments.
+- Make additive migrations safe to run repeatedly; make data migrations observable and safe to resume.
 - Separate schema migration from normal server startup when multiple replicas can race or startup latency matters.
 - Test migration from the previous released schema, not only against an empty database.
 
